@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calculator, Timer, TrendingUp, Settings, Heart } from 'lucide-react';
+import { Calculator, Timer, TrendingUp, Settings, Heart, BarChart3, Calendar } from 'lucide-react';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 type Operation = 'addition' | 'subtraction' | 'multiplication' | 'division';
 type Mode = 'primary' | 'advanced';
@@ -34,6 +35,48 @@ export default function App() {
   const [gameOver, setGameOver] = useState(false);
   const [problemCount, setProblemCount] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
+  const [progressView, setProgressView] = useState<'7days' | '30days'>('7days');
+  const [chartType, setChartType] = useState<'line' | 'bar'>('bar');
+  const [showProgress, setShowProgress] = useState(false);
+
+  // Load and save progress data
+  const getProgressData = () => {
+    const stored = localStorage.getItem('mathTrainerProgress');
+    return stored ? JSON.parse(stored) : {};
+  };
+
+  const saveQuestionCompleted = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const data = getProgressData();
+    data[today] = (data[today] || 0) + 1;
+    localStorage.setItem('mathTrainerProgress', JSON.stringify(data));
+  };
+
+  const getTodayCount = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const data = getProgressData();
+    return data[today] || 0;
+  };
+
+  const getChartData = () => {
+    const days = progressView === '7days' ? 7 : 30;
+    const data = getProgressData();
+    const result = [];
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      const label = i === 0 ? 'Today' : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      result.push({
+        date: label,
+        questions: data[dateStr] || 0
+      });
+    }
+
+    return result;
+  };
 
   const generateProblem = useCallback((currentProblemNum: number): Problem => {
     const operation = selectedOps[Math.floor(Math.random() * selectedOps.length)];
@@ -212,6 +255,9 @@ export default function App() {
       totalTime: prev.totalTime + timer,
       problemsSolved: prev.problemsSolved + 1
     }));
+
+    // Save progress
+    saveQuestionCompleted();
 
     if (isCorrect) {
       setStreak((s) => s + 1);
@@ -426,6 +472,122 @@ export default function App() {
           </div>
 
           <div className="space-y-6">
+            {/* Progress Tracking Card */}
+            <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  <h3 className="text-sm">Progress</h3>
+                </div>
+                <button
+                  onClick={() => setShowProgress(!showProgress)}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showProgress ? 'Hide' : 'Show'}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-muted-foreground">Today:</span>
+                <span className="text-lg font-mono">{getTodayCount()}</span>
+              </div>
+
+              {showProgress && (
+                <div className="space-y-2 mt-3">
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setProgressView('7days')}
+                      className={`flex-1 px-2 py-1 rounded border transition-colors text-xs ${
+                        progressView === '7days'
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background border-border hover:bg-accent'
+                      }`}
+                    >
+                      7d
+                    </button>
+                    <button
+                      onClick={() => setProgressView('30days')}
+                      className={`flex-1 px-2 py-1 rounded border transition-colors text-xs ${
+                        progressView === '30days'
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background border-border hover:bg-accent'
+                      }`}
+                    >
+                      30d
+                    </button>
+                    <button
+                      onClick={() => setChartType(chartType === 'line' ? 'bar' : 'line')}
+                      className="px-2 py-1 rounded border border-border hover:bg-accent transition-colors text-xs"
+                    >
+                      {chartType === 'line' ? 'Line' : 'Bar'}
+                    </button>
+                  </div>
+
+                  <ResponsiveContainer width="100%" height={120}>
+                    {chartType === 'line' ? (
+                      <LineChart data={getChartData()}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis
+                          dataKey="date"
+                          stroke="var(--muted-foreground)"
+                          tick={{ fontSize: 10 }}
+                          interval="preserveStartEnd"
+                        />
+                        <YAxis
+                          stroke="var(--muted-foreground)"
+                          tick={{ fontSize: 10 }}
+                          width={30}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'var(--card)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="questions"
+                          stroke="var(--primary)"
+                          strokeWidth={2}
+                          dot={{ fill: 'var(--primary)', r: 3 }}
+                        />
+                      </LineChart>
+                    ) : (
+                      <BarChart data={getChartData()}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis
+                          dataKey="date"
+                          stroke="var(--muted-foreground)"
+                          tick={{ fontSize: 10 }}
+                          interval="preserveStartEnd"
+                        />
+                        <YAxis
+                          stroke="var(--muted-foreground)"
+                          tick={{ fontSize: 10 }}
+                          width={30}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'var(--card)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                        />
+                        <Bar
+                          dataKey="questions"
+                          fill="var(--primary)"
+                          radius={[4, 4, 0, 0]}
+                        />
+                      </BarChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+
             <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
               <div className="flex items-center gap-2 mb-4">
                 <TrendingUp className="w-5 h-5" />
